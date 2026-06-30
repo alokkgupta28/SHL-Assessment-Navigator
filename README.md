@@ -1,8 +1,7 @@
 # SHL Conversational Assessment Recommender
-
 A production-grade AI hiring assistant for SHL Labs that turns a recruiter's brief into a grounded, explainable shortlist of SHL assessments through natural conversation.
 Built as a **dark-mode-first enterprise AI product** with a TanStack Start/React frontend and a **FastAPI + RAG backend** that does not hallucinate — every recommendation is verified against the SHL catalog.
-> Live demo 
+> Live demo · [Frontend on Lovable](https://id-preview--438df0c5-0a43-4c02-a8f7-b5080ec73156.lovable.app) · Backend deployable to Render/Fly/Cloud Run
 ---
 ## What it does
 - **Conversational discovery:** asks up to 2 focused clarifying questions, then recommends assessments from the SHL catalog.
@@ -147,6 +146,8 @@ A `render.yaml` blueprint can be added if you want one-click provisioning.
 └── README.md
 ```
 ---
-
+## AI disclosure
+This project was built with assistance from AI coding tools (Lovable, Cursor, ChatGPT/Claude) for boilerplate, drafting, and iteration. Architecture, retrieval design, prompt engineering, evaluation methodology, and final validation were directed and reviewed by the author.
+---
 ## License
 Internal submission for SHL Labs internship evaluation. Not open-source licensed.
