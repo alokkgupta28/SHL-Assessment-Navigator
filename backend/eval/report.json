@@ -1,0 +1,378 @@
+{
+  "catalog_size": 377,
+  "n_cases": 10,
+  "modes": {
+    "baseline": {
+      "aggregate": {
+        "recall@1": 0.1326190476190476,
+        "recall@5": 0.3661904761904762,
+        "recall@10": 0.5311904761904762,
+        "mrr@10": 0.74,
+        "ndcg@10": 0.46410222981819393,
+        "mean_confidence": 0.4898192200459164,
+        "cases": 10
+      },
+      "per_case": [
+        {
+          "name": "C1",
+          "gold": 3,
+          "recall_at_1": 0.3333333333333333,
+          "recall_at_5": 0.3333333333333333,
+          "recall_at_10": 0.3333333333333333,
+          "mrr_at_10": 1.0,
+          "ndcg_at_10": 0.46927872602275644,
+          "confidence": 0.46367885501363115,
+          "hits_in_top10": 1
+        },
+        {
+          "name": "C10",
+          "gold": 2,
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.5,
+          "recall_at_10": 1.0,
+          "mrr_at_10": 0.2,
+          "ndcg_at_10": 0.430624116386567,
+          "confidence": 0.29306853612560907,
+          "hits_in_top10": 2
+        },
+        {
+          "name": "C2",
+          "gold": 5,
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.2,
+          "recall_at_10": 0.4,
+          "mrr_at_10": 0.2,
+          "ndcg_at_10": 0.2442584792702138,
+          "confidence": 0.39601733215645146,
+          "hits_in_top10": 2
+        },
+        {
+          "name": "C3",
+          "gold": 4,
+          "recall_at_1": 0.25,
+          "recall_at_5": 0.5,
+          "recall_at_10": 0.75,
+          "mrr_at_10": 1.0,
+          "ndcg_at_10": 0.7757386182436072,
+          "confidence": 0.755034579565075,
+          "hits_in_top10": 3
+        },
+        {
+          "name": "C4",
+          "gold": 5,
+          "recall_at_1": 0.2,
+          "recall_at_5": 0.4,
+          "recall_at_10": 0.6,
+          "mrr_at_10": 1.0,
+          "ndcg_at_10": 0.5684045686173149,
+          "confidence": 0.41817645765543204,
+          "hits_in_top10": 3
+        },
+        {
+          "name": "C5",
+          "gold": 5,
+          "recall_at_1": 0.2,
+          "recall_at_5": 0.2,
+          "recall_at_10": 0.2,
+          "mrr_at_10": 1.0,
+          "ndcg_at_10": 0.3391602052736161,
+          "confidence": 0.5054264351438319,
+          "hits_in_top10": 1
+        },
+        {
+          "name": "C6",
+          "gold": 2,
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.5,
+          "recall_at_10": 1.0,
+          "mrr_at_10": 0.5,
+          "ndcg_at_10": 0.5912352048230277,
+          "confidence": 0.7230102449129748,
+          "hits_in_top10": 2
+        },
+        {
+          "name": "C7",
+          "gold": 5,
+          "recall_at_1": 0.2,
+          "recall_at_5": 0.2,
+          "recall_at_10": 0.2,
+          "mrr_at_10": 1.0,
+          "ndcg_at_10": 0.3391602052736161,
+          "confidence": 0.4983406579548799,
+          "hits_in_top10": 1
+        },
+        {
+          "name": "C8",
+          "gold": 5,
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.4,
+          "recall_at_10": 0.4,
+          "mrr_at_10": 0.5,
+          "ndcg_at_10": 0.38356636737133565,
+          "confidence": 0.4360633914081157,
+          "hits_in_top10": 2
+        },
+        {
+          "name": "C9",
+          "gold": 7,
+          "recall_at_1": 0.14285714285714285,
+          "recall_at_5": 0.42857142857142855,
+          "recall_at_10": 0.42857142857142855,
+          "mrr_at_10": 1.0,
+          "ndcg_at_10": 0.4995958068998837,
+          "confidence": 0.4093757105231624,
+          "hits_in_top10": 3
+        }
+      ],
+      "reranker_enabled": false
+    },
+    "rrf_no_rerank": {
+      "aggregate": {
+        "recall@1": 0.11261904761904762,
+        "recall@5": 0.43619047619047624,
+        "recall@10": 0.5311904761904762,
+        "mrr@10": 0.6950000000000001,
+        "ndcg@10": 0.46155143711241065,
+        "mean_confidence": 0.37687361148233905,
+        "cases": 10
+      },
+      "per_case": [
+        {
+          "name": "C1",
+          "gold": 3,
+          "recall_at_1": 0.3333333333333333,
+          "recall_at_5": 0.3333333333333333,
+          "recall_at_10": 0.3333333333333333,
+          "mrr_at_10": 1.0,
+          "ndcg_at_10": 0.46927872602275644,
+          "confidence": 0.3556932580086336,
+          "hits_in_top10": 1
+        },
+        {
+          "name": "C10",
+          "gold": 2,
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.5,
+          "recall_at_10": 1.0,
+          "mrr_at_10": 0.2,
+          "ndcg_at_10": 0.41443699955334395,
+          "confidence": 0.2778004989741961,
+          "hits_in_top10": 2
+        },
+        {
+          "name": "C2",
+          "gold": 5,
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.4,
+          "recall_at_10": 0.4,
+          "mrr_at_10": 0.25,
+          "ndcg_at_10": 0.27727342735504823,
+          "confidence": 0.29986205948687883,
+          "hits_in_top10": 2
+        },
+        {
+          "name": "C3",
+          "gold": 4,
+          "recall_at_1": 0.25,
+          "recall_at_5": 0.5,
+          "recall_at_10": 0.75,
+          "mrr_at_10": 1.0,
+          "ndcg_at_10": 0.7757386182436072,
+          "confidence": 0.6443561100750312,
+          "hits_in_top10": 3
+        },
+        {
+          "name": "C4",
+          "gold": 5,
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.4,
+          "recall_at_10": 0.6,
+          "mrr_at_10": 0.5,
+          "ndcg_at_10": 0.4621520097001457,
+          "confidence": 0.3558160818792886,
+          "hits_in_top10": 3
+        },
+        {
+          "name": "C5",
+          "gold": 5,
+          "recall_at_1": 0.2,
+          "recall_at_5": 0.2,
+          "recall_at_10": 0.2,
+          "mrr_at_10": 1.0,
+          "ndcg_at_10": 0.3391602052736161,
+          "confidence": 0.30172540460781905,
+          "hits_in_top10": 1
+        },
+        {
+          "name": "C6",
+          "gold": 2,
+          "recall_at_1": 0.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "mrr_at_10": 0.5,
+          "ndcg_at_10": 0.6240505200038379,
+          "confidence": 0.5183345593424177,
+          "hits_in_top10": 2
+        },
+        {
+          "name": "C7",
+          "gold": 5,
+          "recall_at_1": 0.2,
+          "recall_at_5": 0.2,
+          "recall_at_10": 0.2,
+          "mrr_at_10": 1.0,
+          "ndcg_at_10": 0.3391602052736161,
+          "confidence": 0.3021712832903468,
+          "hits_in_top10": 1
+        },
+        {
+          "name": "C8",
+          "gold": 5,
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.4,
+          "recall_at_10": 0.4,
+          "mrr_at_10": 0.5,
+          "ndcg_at_10": 0.38356636737133565,
+          "confidence": 0.356556271326489,
+          "hits_in_top10": 2
+        },
+        {
+          "name": "C9",
+          "gold": 7,
+          "recall_at_1": 0.14285714285714285,
+          "recall_at_5": 0.42857142857142855,
+          "recall_at_10": 0.42857142857142855,
+          "mrr_at_10": 1.0,
+          "ndcg_at_10": 0.5306972923267993,
+          "confidence": 0.35642058783228964,
+          "hits_in_top10": 3
+        }
+      ],
+      "reranker_enabled": false
+    },
+    "rrf": {
+      "aggregate": {
+        "recall@1": 0.1692857142857143,
+        "recall@5": 0.4269047619047619,
+        "recall@10": 0.5511904761904762,
+        "mrr@10": 0.8333333333333334,
+        "ndcg@10": 0.5206914261561152,
+        "mean_confidence": 0.5665786354271576,
+        "cases": 10
+      },
+      "per_case": [
+        {
+          "name": "C1",
+          "gold": 3,
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.3333333333333333,
+          "recall_at_10": 0.3333333333333333,
+          "mrr_at_10": 0.3333333333333333,
+          "ndcg_at_10": 0.23463936301137822,
+          "confidence": 0.5964629107188438,
+          "hits_in_top10": 1
+        },
+        {
+          "name": "C10",
+          "gold": 2,
+          "recall_at_1": 0.5,
+          "recall_at_5": 0.5,
+          "recall_at_10": 1.0,
+          "mrr_at_10": 1.0,
+          "ndcg_at_10": 0.7903864795495061,
+          "confidence": 0.4678413611148662,
+          "hits_in_top10": 2
+        },
+        {
+          "name": "C2",
+          "gold": 5,
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.2,
+          "recall_at_10": 0.4,
+          "mrr_at_10": 0.5,
+          "ndcg_at_10": 0.3347975674340217,
+          "confidence": 0.5034938919524592,
+          "hits_in_top10": 2
+        },
+        {
+          "name": "C3",
+          "gold": 4,
+          "recall_at_1": 0.25,
+          "recall_at_5": 0.75,
+          "recall_at_10": 0.75,
+          "mrr_at_10": 1.0,
+          "ndcg_at_10": 0.8318724637288826,
+          "confidence": 0.7675824183177842,
+          "hits_in_top10": 3
+        },
+        {
+          "name": "C4",
+          "gold": 5,
+          "recall_at_1": 0.2,
+          "recall_at_5": 0.4,
+          "recall_at_10": 0.6,
+          "mrr_at_10": 1.0,
+          "ndcg_at_10": 0.6108377030333358,
+          "confidence": 0.5009516460266129,
+          "hits_in_top10": 3
+        },
+        {
+          "name": "C5",
+          "gold": 5,
+          "recall_at_1": 0.2,
+          "recall_at_5": 0.2,
+          "recall_at_10": 0.4,
+          "mrr_at_10": 1.0,
+          "ndcg_at_10": 0.4412576003965278,
+          "confidence": 0.4776491061792997,
+          "hits_in_top10": 2
+        },
+        {
+          "name": "C6",
+          "gold": 2,
+          "recall_at_1": 0.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "mrr_at_10": 0.5,
+          "ndcg_at_10": 0.6240505200038379,
+          "confidence": 0.6595352067631125,
+          "hits_in_top10": 2
+        },
+        {
+          "name": "C7",
+          "gold": 5,
+          "recall_at_1": 0.2,
+          "recall_at_5": 0.2,
+          "recall_at_10": 0.2,
+          "mrr_at_10": 1.0,
+          "ndcg_at_10": 0.3391602052736161,
+          "confidence": 0.5829800991202061,
+          "hits_in_top10": 1
+        },
+        {
+          "name": "C8",
+          "gold": 5,
+          "recall_at_1": 0.2,
+          "recall_at_5": 0.4,
+          "recall_at_10": 0.4,
+          "mrr_at_10": 1.0,
+          "ndcg_at_10": 0.5087403079104241,
+          "confidence": 0.5717154950754002,
+          "hits_in_top10": 2
+        },
+        {
+          "name": "C9",
+          "gold": 7,
+          "recall_at_1": 0.14285714285714285,
+          "recall_at_5": 0.2857142857142857,
+          "recall_at_10": 0.42857142857142855,
+          "mrr_at_10": 1.0,
+          "ndcg_at_10": 0.4911720512196216,
+          "confidence": 0.5375742190029908,
+          "hits_in_top10": 3
+        }
+      ],
+      "reranker_enabled": true
+    }
+  }
+}

@@ -1,0 +1,46 @@
+services:
+  api:
+    build: .
+    image: shl-recommender:latest
+    container_name: shl-recommender
+    ports:
+      - "8000:8000"
+    environment:
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      CATALOG_PATH: data/shl_catalog.json
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:8080}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      RATE_LIMIT_PER_MINUTE: "60"
+      RATE_LIMIT_BURST: "20"
+    volumes:
+      - hf-cache:/app/data/.cache
+    restart: unless-stopped
+    # --- hardening -------------------------------------------------------
+    # Read-only rootfs: app code is immutable at runtime. The only writable
+    # surfaces are the HF model cache (named volume) and /tmp (tmpfs).
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # Conservative resource ceiling for a single Uvicorn worker. Embedding
+    # model load is the spike; steady-state stays well under 1 GiB.
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1500M
+        reservations:
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  hf-cache:

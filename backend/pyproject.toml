@@ -1,0 +1,10 @@
+[project]
+name = "shl-recommender-backend"
+version = "1.0.0"
+description = "SHL Conversational Assessment Recommender backend"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["live: hits real Gemini API (requires GEMINI_API_KEY)"]
+asyncio_mode = "auto"
