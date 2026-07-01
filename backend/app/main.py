@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from .catalog.models import Assessment
 from .config import get_settings
 from .deps import EngineDep, build_container, get_container
 from .llm.validator import coerce_response
@@ -18,7 +19,7 @@ from .observability import middleware as obs_middleware
 from .observability.context import set_session_id
 from .observability.errors import install_handlers
 from .observability.logging import configure as configure_logging, get_logger
-from .schemas import ChatRequest, ChatResponse, HealthResponse
+from .schemas import AssessmentResponse, ChatRequest, ChatResponse, HealthResponse
 
 log = get_logger(__name__)
 
@@ -36,6 +37,22 @@ def _log_excepthook(exc_type, exc, tb):
         pass
 
 _sys.excepthook = _log_excepthook
+
+
+def _assessment_to_response(assessment: Assessment) -> dict:
+    return {
+        "id": assessment.id,
+        "name": assessment.name,
+        "category": assessment.category,
+        "durationMinutes": assessment.duration_minutes,
+        "remote": assessment.remote,
+        "adaptive": assessment.adaptive,
+        "jobLevels": assessment.job_levels,
+        "languages": assessment.languages,
+        "skills": assessment.skills,
+        "description": assessment.description,
+        "officialUrl": assessment.url,
+    }
 
 
 @asynccontextmanager
@@ -131,6 +148,27 @@ def create_app() -> FastAPI:
             from fastapi.responses import JSONResponse
             return JSONResponse({"ready": False}, status_code=503)
         return {"ready": True, "catalog_size": container.catalog_size}
+
+    @app.get("/assessments", response_model=list[AssessmentResponse], tags=["catalog"])
+    def assessments():
+        container = getattr(app.state, "container", None)
+        if container is None:
+            return []
+        return [_assessment_to_response(item) for item in container.catalog]
+
+    @app.get("/assessments/{assessment_id}", response_model=AssessmentResponse, tags=["catalog"])
+    def assessment(assessment_id: str):
+        container = getattr(app.state, "container", None)
+        if container is None:
+            from fastapi import HTTPException
+
+            raise HTTPException(status_code=503, detail="Service not ready")
+        for item in container.catalog:
+            if item.id == assessment_id:
+                return _assessment_to_response(item)
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=404, detail="Assessment not found")
 
     @app.get("/metrics", tags=["meta"])
     def metrics():

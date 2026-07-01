@@ -3,9 +3,10 @@ import { zodValidator, fallback } from "@tanstack/zod-adapter";
 import { z } from "zod";
 import { motion } from "framer-motion";
 import { ArrowLeft, Check, GitCompareArrows, Trash2, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
-import { findAssessment } from "@/data/seed-assessments";
+import { getAssessment } from "@/services/assessments";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Assessment } from "@/types/assessment";
@@ -34,12 +35,24 @@ interface Row {
 function ComparePage() {
   const { ids } = Route.useSearch() as { ids: string };
   const navigate = Route.useNavigate();
-  const list = ids
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .map((id) => findAssessment(id))
-    .filter((a): a is Assessment => Boolean(a));
+  const [list, setList] = useState<Assessment[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const resolvedIds = ids
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    Promise.all(resolvedIds.map(async (id) => getAssessment(id))).then((items) => {
+      if (cancelled) return;
+      setList(items.filter((a): a is Assessment => Boolean(a)));
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [ids]);
 
   const remove = (id: string) => {
     const next = list.filter((a) => a.id !== id).map((a) => a.id).join(",");
@@ -165,7 +178,7 @@ function ComparePage() {
                 <Button
                   size="icon"
                   variant="ghost"
-                  className="h-8 w-8 rounded-full flex-shrink-0"
+                  className="h-8 w-8 rounded-full shrink-0"
                   onClick={() => remove(a.id)}
                   aria-label={`Remove ${a.name}`}
                 >
@@ -189,11 +202,11 @@ function ComparePage() {
           <table className="w-full text-sm">
             <thead>
               <tr>
-                <th className="sticky left-0 bg-card/80 backdrop-blur text-left px-5 py-4 align-bottom w-[160px] text-[11px] uppercase tracking-widest text-muted-foreground z-10">
+                <th className="sticky left-0 bg-card/80 backdrop-blur text-left px-5 py-4 align-bottom w-40 text-[11px] uppercase tracking-widest text-muted-foreground z-10">
                   Feature
                 </th>
                 {list.map((a) => (
-                  <th key={a.id} className="text-left px-5 py-4 align-bottom min-w-[260px]">
+                  <th key={a.id} className="text-left px-5 py-4 align-bottom min-w-65">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <div className="text-[11px] uppercase tracking-widest text-muted-foreground">{a.category}</div>
@@ -208,7 +221,7 @@ function ComparePage() {
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="h-7 w-7 rounded-full flex-shrink-0"
+                        className="h-7 w-7 rounded-full shrink-0"
                         onClick={() => remove(a.id)}
                         aria-label={`Remove ${a.name}`}
                       >
@@ -241,7 +254,7 @@ function ComparePage() {
                         key={a.id}
                         className={cn(
                           "px-5 py-4 align-top text-[14px] transition-colors",
-                          diff && "bg-amber-400/[0.03]",
+                          diff && "bg-amber-400/3",
                         )}
                       >
                         {row.render(a)}

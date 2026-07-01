@@ -55,6 +55,13 @@ def build_container(settings: Settings | None = None) -> Container:
             llm = None
     else:
         log.info("startup_llm_skipped", extra={"reason": "no_api_key"})
+    if retriever.reranker is not None:
+        try:
+            log.info("startup_warming_reranker", extra={"model": retriever.reranker.model_name})
+            retriever.reranker.warmup()
+            log.info("startup_reranker_ready", extra={"model": retriever.reranker.model_name})
+        except Exception as exc:  # noqa: BLE001
+            log.warning("startup_reranker_unavailable", extra={"error": str(exc)})
     engine = ConversationEngine(catalog, retriever, settings, llm)
     log.info("startup_complete", extra={"catalog_size": len(catalog)})
     return Container(settings, catalog, retriever, llm, engine)

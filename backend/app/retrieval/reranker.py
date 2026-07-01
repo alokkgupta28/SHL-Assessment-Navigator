@@ -18,18 +18,20 @@ order with their fused score preserved).
 from __future__ import annotations
 
 import logging
-from functools import lru_cache
+from typing import Any
 
 log = logging.getLogger(__name__)
 
 DEFAULT_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+_MODELS: dict[str, Any] = {}
 
 
-@lru_cache(maxsize=2)
 def _load(model_name: str):
     try:
         from sentence_transformers import CrossEncoder
-        return CrossEncoder(model_name)
+        model = CrossEncoder(model_name)
+        _MODELS[model_name] = model
+        return model
     except Exception as exc:  # network / disk / missing model
         log.warning("cross-encoder unavailable (%s); reranking disabled", exc)
         return None
@@ -43,6 +45,9 @@ class CrossEncoderReranker:
 
     @property
     def available(self) -> bool:
+        return self.model_name in _MODELS
+
+    def warmup(self) -> bool:
         return _load(self.model_name) is not None
 
     def rerank(

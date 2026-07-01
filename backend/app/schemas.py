@@ -88,6 +88,20 @@ class Recommendation(BaseModel):
 
 
 
+class AssessmentResponse(BaseModel):
+    id: str
+    name: str
+    category: str
+    durationMinutes: int
+    remote: bool
+    adaptive: bool
+    jobLevels: list[str]
+    languages: list[str]
+    skills: list[str]
+    description: str
+    officialUrl: str
+
+
 class ComparisonCell(BaseModel):
     id: str
     name: str

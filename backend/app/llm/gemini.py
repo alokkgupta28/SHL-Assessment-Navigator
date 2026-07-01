@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from typing import Any
 
 from ..config import get_settings
@@ -54,10 +55,19 @@ class GeminiClient:
         for attempt in range(1, MAX_ATTEMPTS + 1):
             start = _time.perf_counter()
             try:
-                resp = self._client.generate_content(
-                    prompt,
-                    request_options={"timeout": self.timeout_s},
-                )
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(
+                        self._client.generate_content,
+                        prompt,
+                        request_options={"timeout": self.timeout_s},
+                    )
+                    try:
+                        resp = future.result(timeout=self.timeout_s)
+                    except FuturesTimeoutError as e:
+                        future.cancel()
+                        raise TimeoutError(
+                            f"Gemini request timed out after {self.timeout_s}s"
+                        ) from e
                 text = (resp.text or "").strip()
                 if text.startswith("```"):
                     text = text.strip("`")

@@ -4,25 +4,26 @@ import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { findAssessment, seedAssessments } from "@/data/seed-assessments";
+import { getAssessment, listAssessments } from "@/services/assessments";
 import { AssessmentCard } from "@/components/assessments/assessment-card";
 import { useLocalSet } from "@/hooks/use-local-set";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/assessments/$id")({
-  head: ({ params }) => {
-    const a = findAssessment(params.id);
-    return {
-      meta: [
-        { title: a ? `${a.name} — SHL Assessment AI` : "Assessment — SHL Assessment AI" },
-        { name: "description", content: a?.description ?? "SHL assessment details." },
-      ],
-    };
-  },
-  loader: ({ params }) => {
-    const a = findAssessment(params.id);
+  head: () => ({
+    meta: [
+      { title: "Assessment — SHL Assessment AI" },
+      { name: "description", content: "SHL assessment details." },
+    ],
+  }),
+  loader: async ({ params }) => {
+    const [catalog, assessment] = await Promise.all([listAssessments(), getAssessment(params.id)]);
+    const a = assessment ?? catalog.find((item) => item.id === params.id);
     if (!a) throw notFound();
-    return a;
+    return {
+      assessment: a,
+      related: catalog.filter((item) => item.id !== a.id && item.category === a.category).slice(0, 3),
+    };
   },
   notFoundComponent: () => (
     <div className="min-h-screen flex items-center justify-center">
@@ -37,10 +38,9 @@ export const Route = createFileRoute("/assessments/$id")({
 });
 
 function AssessmentDetail() {
-  const a = Route.useLoaderData();
+  const { assessment: a, related } = Route.useLoaderData();
   const compare = useLocalSet("shl-compare");
   const saved = useLocalSet("shl-saved");
-  const related = seedAssessments.filter((x) => x.id !== a.id && x.category === a.category).slice(0, 3);
 
   return (
     <div className="min-h-screen bg-background">
