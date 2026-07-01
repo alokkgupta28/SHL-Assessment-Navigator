@@ -59,6 +59,10 @@ from .reranker import CrossEncoderReranker
 from .rrf import reciprocal_rank_fusion
 from pathlib import Path
 import os
+import time
+from ..observability.logging import get_logger
+
+log = get_logger("shl.retriever")
 
 # Canonical phrases injected when a slot is present — boosts BM25 recall
 # on the assessment *type*, which assessment descriptions almost always
@@ -359,8 +363,26 @@ class HybridRetriever:
         candidate_n = min(self.candidate_n, n)
 
         # 1. Dense
-        qvec = encode([query], self.settings.embedding_model)[0]
-        d_scores, d_idx = self.faiss.search(qvec, candidate_n)
+        try:
+            log.info("encode_before", extra={"query_len": len(query), "model": self.settings.embedding_model})
+            t0_encode = time.perf_counter()
+            qvec = encode([query], self.settings.embedding_model)[0]
+            t1_encode = time.perf_counter()
+            log.info("encode_after", extra={"elapsed_ms": int((t1_encode - t0_encode) * 1000)})
+        except Exception as exc:  # noqa: BLE001
+            tb = traceback.format_exc()
+            log.error("encode_exception", extra={"type": type(exc).__name__, "repr": repr(exc), "traceback": tb})
+            raise
+        try:
+            log.info("faiss_search_before", extra={"candidate_n": candidate_n})
+            t0_faiss = time.perf_counter()
+            d_scores, d_idx = self.faiss.search(qvec, candidate_n)
+            t1_faiss = time.perf_counter()
+            log.info("faiss_search_after", extra={"elapsed_ms": int((t1_faiss - t0_faiss) * 1000)})
+        except Exception as exc:  # noqa: BLE001
+            tb = traceback.format_exc()
+            log.error("faiss_search_exception", extra={"type": type(exc).__name__, "repr": repr(exc), "traceback": tb})
+            raise
         dense_ranked = [int(i) for i in d_idx if i >= 0]
         dense_score_map = {int(i): float(s) for s, i in zip(d_scores, d_idx) if i >= 0}
 
