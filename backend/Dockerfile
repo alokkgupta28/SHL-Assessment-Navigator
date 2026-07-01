@@ -31,6 +31,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 COPY --from=builder /install /usr/local
+## Prefer explicit copy of prebuilt retrieval artifacts if present so
+## the runtime image does not attempt to build them.
+COPY --chown=app:app data/faiss.index /app/data/faiss.index
+COPY --chown=app:app data/embeddings.npy /app/data/embeddings.npy
 COPY --chown=app:app . /app
 
 USER app

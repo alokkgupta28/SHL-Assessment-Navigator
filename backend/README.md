@@ -24,6 +24,33 @@ uvicorn app.main:app --reload
 
 Server: `http://localhost:8000` · Docs: `http://localhost:8000/docs`
 
+## Building Retrieval Index (offline)
+
+The FAISS index and precomputed embeddings must be generated offline and
+committed (or provided to your container) so the API does not initialize
+heavy embedding models at startup. This repository includes a helper
+script that produces `data/embeddings.npy` and `data/faiss.index`.
+
+Run locally (developer machine) once and commit the output:
+
+```bash
+python scripts/build_index.py
+# or specify a different model or force rebuild
+python scripts/build_index.py --model sentence-transformers/all-MiniLM-L6-v2 --force
+```
+
+Files written:
+
+- `backend/data/embeddings.npy` — normalized float32 embedding matrix
+- `backend/data/faiss.index` — FAISS index built over the embeddings
+
+Notes:
+
+- The application will load `faiss.index` at startup and will NOT
+  instantiate `SentenceTransformer` unless the index is missing and
+  you explicitly enable startup building (not recommended).
+- Re-run the script whenever `backend/data/shl_catalog.json` changes.
+
 ## Quickstart (Docker)
 
 ```bash

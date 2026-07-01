@@ -57,6 +57,8 @@ from .embeddings import encode
 from .faiss_index import FaissIndex
 from .reranker import CrossEncoderReranker
 from .rrf import reciprocal_rank_fusion
+from pathlib import Path
+import os
 
 # Canonical phrases injected when a slot is present — boosts BM25 recall
 # on the assessment *type*, which assessment descriptions almost always
@@ -158,8 +160,68 @@ class HybridRetriever:
             self.faiss = None
             self.bm25 = None
             return
-        vecs = encode(self.corpus, settings.embedding_model)
-        self.faiss = FaissIndex(vecs)
+        # Prefer a pre-built FAISS index to avoid heavy model initialization
+        # at startup. The index and embeddings are expected at
+        # `<repo>/backend/data/faiss.index` and `.../embeddings.npy`.
+        backend_data = Path(__file__).resolve().parents[2] / "data"
+        index_path = backend_data / "faiss.index"
+        embeddings_path = backend_data / "embeddings.npy"
+
+        # Try loading a matching prebuilt FAISS index first.
+        if index_path.exists():
+            try:
+                candidate = FaissIndex.load(str(index_path))
+                ntotal = getattr(candidate.index, "ntotal", None)
+                if ntotal is not None and int(ntotal) == len(catalog):
+                    self.faiss = candidate
+                else:
+                    # index doesn't match this catalog; ignore it and
+                    # fall back to embeddings or building.
+                    self.faiss = None
+            except Exception:
+                # If loading fails, continue to other fallback paths.
+                self.faiss = None
+
+        # If we didn't get a usable index, try embeddings or build.
+        if getattr(self, "faiss", None) is None:
+            # If precomputed embeddings exist, build the FaissIndex quickly
+            if embeddings_path.exists():
+                vecs = np.load(str(embeddings_path)).astype("float32")
+                # Validate embeddings shape matches catalog
+                if vecs.shape[0] != len(catalog):
+                    # Mismatch — do not use these embeddings.
+                    self.faiss = None
+                else:
+                    self.faiss = FaissIndex(vecs)
+                    # persist index for future boots if possible
+                    try:
+                        import faiss
+
+                        faiss.write_index(self.faiss.index, str(index_path))
+                    except Exception:
+                        pass
+            else:
+                # Building embeddings at startup is potentially memory-heavy.
+                # Only allow it when explicitly enabled in local development
+                # via the `BUILD_FAISS_INDEX_AT_STARTUP` env var.
+                if os.environ.get("BUILD_FAISS_INDEX_AT_STARTUP", "").lower() in (
+                    "1",
+                    "true",
+                    "yes",
+                ):
+                    vecs = encode(self.corpus, settings.embedding_model)
+                    np.save(str(embeddings_path), vecs)
+                    self.faiss = FaissIndex(vecs)
+                    try:
+                        import faiss
+
+                        faiss.write_index(self.faiss.index, str(index_path))
+                    except Exception:
+                        pass
+                else:
+                    raise RuntimeError(
+                        f"FAISS index not found at {index_path}. Run scripts/build_index.py to generate it."
+                    )
         self.bm25 = BM25(self.corpus)
 
 
