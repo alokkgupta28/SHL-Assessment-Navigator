@@ -48,6 +48,22 @@ def create_app() -> FastAPI:
         # Tight default body cap; chat payloads are conversational, not bulk.
         openapi_url="/openapi.json",
     )
+    # Temporary early middleware: log incoming Origin and whether it's allowed.
+    # This runs before CORSMiddleware so we can observe the raw header the app sees.
+    from starlette.middleware.base import BaseHTTPMiddleware
+    from starlette.requests import Request
+
+    class OriginLoggingMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request: Request, call_next):
+            try:
+                origin = request.headers.get("origin")
+                allowed = origin in settings.origins if origin else False
+                log.info("origin_seen", extra={"origin": origin, "allowed": allowed})
+            except Exception:
+                log.exception("origin_logging_failed")
+            return await call_next(request)
+
+    app.add_middleware(OriginLoggingMiddleware)
 
     # CORS: explicit allow-list only. Refuse to fall back to "*" — that would
     # break the published-site security model and allow any origin to call /chat.
@@ -62,6 +78,19 @@ def create_app() -> FastAPI:
         allow_credentials=False,
         max_age=600,
     )
+    # Diagnostic startup log for CORS settings (temporary)
+    try:
+        log.info(
+            "CORS CONFIG",
+            extra={
+                "allowed_origins_raw": settings.allowed_origins,
+                "allowed_origins_parsed": settings.origins,
+                "allowed_methods": ["GET", "POST", "OPTIONS"],
+                "allowed_headers": ["content-type", "x-request-id"],
+            },
+        )
+    except Exception:
+        log.exception("cors_config_log_failed")
     obs_middleware.install(app, rate_per_minute=settings.rate_limit_per_minute,
                            burst=settings.rate_limit_burst)
     install_handlers(app)
@@ -119,6 +148,17 @@ def create_app() -> FastAPI:
         set_session_id(req.session_id)
         raw = await run_in_threadpool(engine.handle, req)
         return coerce_response(raw.model_dump())
+
+
+    # Temporary diagnostic endpoint to inspect CORS runtime configuration.
+    @app.get("/debug/cors")
+    def debug_cors():
+        return {
+            "allowed_origins_raw": settings.allowed_origins,
+            "allowed_origins_parsed": settings.origins,
+            "allowed_methods": ["GET", "POST", "OPTIONS"],
+            "allowed_headers": ["content-type", "x-request-id"],
+        }
 
 
     return app
