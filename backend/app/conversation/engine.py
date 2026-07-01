@@ -105,13 +105,28 @@ class ConversationEngine:
         return [self._to_rec(mem.state, a, score=1.0) for a in items]
 
     def _to_rec(self, state: ConversationState, a: Assessment, score: float) -> Recommendation:
-        return Recommendation(
-            id=a.id, name=a.name, url=a.url,
-            duration_minutes=a.duration_minutes, remote=a.remote, adaptive=a.adaptive,
-            job_levels=a.job_levels, languages=a.languages, skills=a.skills,
-            category=a.category, score=round(float(score), 4),
-            reasons=build_reasons(state, a),
-        )
+        try:
+            log.info("to_rec_before_build_reasons", extra={"id": a.id})
+            reasons = build_reasons(state, a)
+            log.info("to_rec_after_build_reasons", extra={"id": a.id, "n_reasons": len(reasons)})
+        except Exception as exc:  # noqa: BLE001
+            tb = traceback.format_exc()
+            log.error("build_reasons_exception", extra={"id": a.id, "type": type(exc).__name__, "repr": repr(exc), "traceback": tb})
+            raise
+        try:
+            rec = Recommendation(
+                id=a.id, name=a.name, url=a.url,
+                duration_minutes=a.duration_minutes, remote=a.remote, adaptive=a.adaptive,
+                job_levels=a.job_levels, languages=a.languages, skills=a.skills,
+                category=a.category, score=round(float(score), 4),
+                reasons=reasons,
+            )
+            log.info("to_rec_created", extra={"id": a.id})
+            return rec
+        except Exception as exc:  # noqa: BLE001
+            tb = traceback.format_exc()
+            log.error("to_rec_creation_exception", extra={"id": a.id, "type": type(exc).__name__, "repr": repr(exc), "traceback": tb})
+            raise
 
     # ---------- entry point ----------
 
@@ -332,16 +347,30 @@ class ConversationEngine:
         if hard:
             ranked = hard
         try:
-            mem.pinned_ids = [a.id for a, _ in ranked]
-            log.info("after_pinned_ids_assignment", extra={"session_id": req.session_id, "n_pinned": len(mem.pinned_ids)})
+            log.info("pinned_ids_assignment_start", extra={"session_id": req.session_id, "n_ranked": len(ranked)})
+            t0_pinned = time.perf_counter()
+            pinned = []
+            for idx, (a, _) in enumerate(ranked):
+                try:
+                    log.info("pinned_ids_item_start", extra={"session_id": req.session_id, "idx": idx, "id": a.id})
+                    pinned.append(a.id)
+                    log.info("pinned_ids_item_done", extra={"session_id": req.session_id, "idx": idx, "id": a.id})
+                except Exception:
+                    log.exception("pinned_ids_item_exception", extra={"session_id": req.session_id, "idx": idx, "id": getattr(a, 'id', None)})
+                    raise
+            mem.pinned_ids = pinned
+            t1_pinned = time.perf_counter()
+            log.info("after_pinned_ids_assignment", extra={"session_id": req.session_id, "n_pinned": len(mem.pinned_ids), "elapsed_ms": int((t1_pinned - t0_pinned) * 1000)})
         except Exception as exc:  # noqa: BLE001
             tb = traceback.format_exc()
             log.error("pinned_ids_assignment_exception", extra={"session_id": req.session_id, "type": type(exc).__name__, "repr": repr(exc), "traceback": tb})
             raise
         try:
             log.info("before_compose_reply", extra={"session_id": req.session_id})
+            t0_comp = time.perf_counter()
             reply = self._compose_reply(mem, refinement_mode=False)
-            log.info("after_compose_reply", extra={"session_id": req.session_id})
+            t1_comp = time.perf_counter()
+            log.info("after_compose_reply", extra={"session_id": req.session_id, "elapsed_ms": int((t1_comp - t0_comp) * 1000)})
         except Exception as exc:  # noqa: BLE001
             tb = traceback.format_exc()
             log.error("compose_reply_exception", extra={"session_id": req.session_id, "type": type(exc).__name__, "repr": repr(exc), "traceback": tb})
@@ -349,8 +378,21 @@ class ConversationEngine:
 
         try:
             log.info("before_recs_build", extra={"session_id": req.session_id})
-            recs = [self._to_rec(mem.state, a, s) for a, s in ranked]
-            log.info("after_recs_build", extra={"session_id": req.session_id, "n_recs": len(recs)})
+            t0_recs = time.perf_counter()
+            recs = []
+            for idx, (a, s) in enumerate(ranked):
+                t0_item = time.perf_counter()
+                try:
+                    log.info("recs_build_item_start", extra={"session_id": req.session_id, "idx": idx, "id": a.id})
+                    r = self._to_rec(mem.state, a, s)
+                    recs.append(r)
+                    t1_item = time.perf_counter()
+                    log.info("recs_build_item_done", extra={"session_id": req.session_id, "idx": idx, "id": a.id, "elapsed_ms": int((t1_item - t0_item) * 1000)})
+                except Exception:
+                    log.exception("recs_build_item_exception", extra={"session_id": req.session_id, "idx": idx, "id": getattr(a, 'id', None)})
+                    raise
+            t1_recs = time.perf_counter()
+            log.info("after_recs_build", extra={"session_id": req.session_id, "n_recs": len(recs), "elapsed_ms": int((t1_recs - t0_recs) * 1000)})
         except Exception as exc:  # noqa: BLE001
             tb = traceback.format_exc()
             log.error("recs_build_exception", extra={"session_id": req.session_id, "type": type(exc).__name__, "repr": repr(exc), "traceback": tb})
@@ -358,8 +400,10 @@ class ConversationEngine:
 
         try:
             log.info("before_respond", extra={"session_id": req.session_id})
+            t0_resp = time.perf_counter()
             resp = self._respond(req, mem, reply, recs=recs)
-            log.info("after_respond", extra={"session_id": req.session_id})
+            t1_resp = time.perf_counter()
+            log.info("after_respond", extra={"session_id": req.session_id, "elapsed_ms": int((t1_resp - t0_resp) * 1000)})
         except Exception as exc:  # noqa: BLE001
             tb = traceback.format_exc()
             log.error("respond_exception", extra={"session_id": req.session_id, "type": type(exc).__name__, "repr": repr(exc), "traceback": tb})
@@ -505,13 +549,21 @@ class ConversationEngine:
         *,
         recs: list[Recommendation],
     ) -> ChatResponse:
-        return ChatResponse(
-            session_id=req.session_id,
-            reply=reply,
-            need_clarification=False,
-            clarifying_question=None,
-            recommendations=recs,
-            comparison=None,
-            state=mem.state,
-            safety=Safety(),
-        )
+        try:
+            log.info("respond_before_construction", extra={"session_id": req.session_id, "n_recs": len(recs)})
+            cr = ChatResponse(
+                session_id=req.session_id,
+                reply=reply,
+                need_clarification=False,
+                clarifying_question=None,
+                recommendations=recs,
+                comparison=None,
+                state=mem.state,
+                safety=Safety(),
+            )
+            log.info("respond_after_construction", extra={"session_id": req.session_id})
+            return cr
+        except Exception as exc:  # noqa: BLE001
+            tb = traceback.format_exc()
+            log.error("respond_construction_exception", extra={"session_id": req.session_id, "type": type(exc).__name__, "repr": repr(exc), "traceback": tb})
+            raise
