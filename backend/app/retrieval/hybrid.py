@@ -65,6 +65,11 @@ from ..observability.logging import get_logger
 
 log = get_logger("shl.retriever")
 
+# Low-memory production mode disables dense retrieval and the reranker.
+LOW_MEMORY_MODE = os.environ.get("LOW_MEMORY_MODE", "").lower() in ("1", "true", "yes")
+if LOW_MEMORY_MODE:
+    log.info("Running in LOW_MEMORY_MODE: dense retrieval and reranker disabled.")
+
 # Canonical phrases injected when a slot is present — boosts BM25 recall
 # on the assessment *type*, which assessment descriptions almost always
 # use verbatim (e.g. "Personality & Behavior", "Cognitive Ability").
