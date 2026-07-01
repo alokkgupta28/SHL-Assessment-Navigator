@@ -30,6 +30,7 @@ from ..config import Settings
 from ..llm.gemini import GeminiClient
 from ..llm.prompts import DIFF_SYSTEM, EXPLAINER_SYSTEM
 from ..observability.logging import get_logger
+import traceback
 from ..ranking.ranker import build_reasons, rank
 from ..retrieval.hybrid import HybridRetriever
 from ..safety import scan
@@ -119,21 +120,35 @@ class ConversationEngine:
         # session_id from corrupting turn counts / pinned shortlist.
         mem = self._session(req.session_id)
         t0 = time.perf_counter()
-        with mem.lock:
-            resp = self._handle_locked(req, mem)
-        latency_ms = int((time.perf_counter() - t0) * 1000)
-        log.info(
-            "turn",
-            extra={
-                "session_id": req.session_id,
-                "turn": mem.turn_count,
-                "n_recs": len(resp.recommendations),
-                "need_clarification": resp.need_clarification,
-                "safety_blocked": resp.safety.blocked,
-                "latency_ms": latency_ms,
-                "mode": req.mode,
-            },
-        )
+        log.info("handle_enter", extra={"session_id": req.session_id})
+        try:
+            with mem.lock:
+                log.info("handle_acquired_lock", extra={"session_id": req.session_id})
+                resp = self._handle_locked(req, mem)
+        except Exception as exc:  # noqa: BLE001
+            tb = traceback.format_exc()
+            log.error("handle_exception", extra={"session_id": req.session_id, "error": str(exc), "traceback": tb})
+            raise
+        finally:
+            elapsed = int((time.perf_counter() - t0) * 1000)
+            log.info("handle_exit_timing", extra={"session_id": req.session_id, "elapsed_ms": elapsed})
+
+        try:
+            latency_ms = int((time.perf_counter() - t0) * 1000)
+            log.info(
+                "turn",
+                extra={
+                    "session_id": req.session_id,
+                    "turn": mem.turn_count,
+                    "n_recs": len(resp.recommendations),
+                    "need_clarification": resp.need_clarification,
+                    "safety_blocked": resp.safety.blocked,
+                    "latency_ms": latency_ms,
+                    "mode": req.mode,
+                },
+            )
+        except Exception:
+            log.exception("turn_log_failed", extra={"session_id": req.session_id})
         return resp
 
 
@@ -165,10 +180,14 @@ class ConversationEngine:
             mode_hint=req.mode,
             compare_ids=req.compare_ids,
         )
-        log.debug(
-            "intent_classified",
-            extra={"intent": it.intent, "has_pinned": bool(mem.pinned_ids)},
-        )
+        try:
+            log.debug(
+                "intent_classified",
+                extra={"intent": it.intent, "has_pinned": bool(mem.pinned_ids)},
+            )
+            log.info("intent_done", extra={"session_id": req.session_id, "intent": it.intent})
+        except Exception:
+            log.exception("intent_log_failed", extra={"session_id": req.session_id})
 
 
         # 4) Out-of-scope redirect (legal / regulatory / medical).
@@ -257,20 +276,32 @@ class ConversationEngine:
                 recommendations=self._recs(mem),  # keep prior list visible if any
                 comparison=None, state=mem.state, safety=Safety(),
             )
-
         # Run retrieval + rank
-        candidates, diag = self.retriever.search(mem.state, return_diagnostics=True)
-        log.info(
-            "retrieval",
-            extra={
-                "query": diag.query[:200],
-                "n_candidates": len(candidates),
-                "confidence": round(diag.confidence, 3),
-                "cross_encoder_used": diag.cross_encoder_used,
-            },
-        )
+        try:
+            t_retr0 = time.perf_counter()
+            candidates, diag = self.retriever.search(mem.state, return_diagnostics=True)
+            t_retr1 = time.perf_counter()
+            log.info(
+                "retrieval",
+                extra={
+                    "session_id": req.session_id,
+                    "query": (diag.query[:200] if hasattr(diag, 'query') else ''),
+                    "n_candidates": len(candidates),
+                    "confidence": round(getattr(diag, 'confidence', 0.0), 3),
+                    "cross_encoder_used": getattr(diag, 'cross_encoder_used', False),
+                    "retrieval_ms": int((t_retr1 - t_retr0) * 1000),
+                },
+            )
+        except Exception as exc:  # noqa: BLE001
+            tb = traceback.format_exc()
+            log.error("retrieval_failed", extra={"session_id": req.session_id, "error": str(exc), "traceback": tb})
+            raise
 
-        ranked = rank(mem.state, candidates, top_k=MAX_SHORTLIST)
+        try:
+            ranked = rank(mem.state, candidates, top_k=MAX_SHORTLIST)
+            log.info("ranking_done", extra={"session_id": req.session_id, "n_ranked": len(ranked)})
+        except Exception:
+            log.exception("ranking_failed", extra={"session_id": req.session_id})
         # Hard duration budget at the *presentation* layer: retrieval keeps
         # near-misses for recall, but a user who said "under 45 min" should
         # never see a 60-min card. Fall back to ranked if filtering empties.
@@ -278,9 +309,28 @@ class ConversationEngine:
         if hard:
             ranked = hard
         mem.pinned_ids = [a.id for a, _ in ranked]
+        try:
+            log.info("compose_reply_start", extra={"session_id": req.session_id})
+            reply = self._compose_reply(mem, refinement_mode=False)
+            log.info("compose_reply_done", extra={"session_id": req.session_id})
+        except Exception:
+            log.exception("compose_reply_failed", extra={"session_id": req.session_id})
+            raise
 
-        reply = self._compose_reply(mem, refinement_mode=False)
-        return self._respond(req, mem, reply, recs=[self._to_rec(mem.state, a, s) for a, s in ranked])
+        try:
+            recs = [self._to_rec(mem.state, a, s) for a, s in ranked]
+            log.info("recs_built", extra={"session_id": req.session_id, "n_recs": len(recs)})
+        except Exception:
+            log.exception("recs_build_failed", extra={"session_id": req.session_id})
+            raise
+
+        try:
+            resp = self._respond(req, mem, reply, recs=recs)
+            log.info("respond_built", extra={"session_id": req.session_id})
+            return resp
+        except Exception:
+            log.exception("respond_failed", extra={"session_id": req.session_id})
+            raise
 
 
     # ---------- helpers ----------
@@ -319,6 +369,8 @@ class ConversationEngine:
         items = self._ground(mem.pinned_ids[:2])
         if self.llm is not None and len(items) == 2:
             try:
+                log.info("explain_diff_before_llm", extra={"session_id": None, "user_text_len": len(user_text)})
+                t0 = time.perf_counter()
                 payload = self.llm.json(
                     DIFF_SYSTEM,
                     json.dumps({
@@ -331,11 +383,17 @@ class ConversationEngine:
                         ],
                     }),
                 )
-                reply = (payload.get("reply") or "").strip()
-                if reply:
-                    return reply
+                t1 = time.perf_counter()
+                log.info("explain_diff_after_llm", extra={"duration_ms": int((t1 - t0) * 1000), "payload_keys": list(payload.keys()) if isinstance(payload, dict) else type(payload).__name__})
+                try:
+                    reply = (payload.get("reply") or "").strip()
+                    log.info("explain_diff_parsed_reply", extra={"reply_len": len(reply)})
+                    if reply:
+                        return reply
+                except Exception:
+                    log.exception("explain_diff_parse_failed")
             except Exception:
-                pass
+                log.exception("explain_diff_llm_exception")
         # Deterministic fallback.
         if len(items) == 2:
             a, b = items
@@ -355,9 +413,8 @@ class ConversationEngine:
 
         if self.llm is not None:
             try:
-                payload = self.llm.json(
-                    EXPLAINER_SYSTEM,
-                    json.dumps({
+                try:
+                    body = json.dumps({
                         "state": mem.state.model_dump(),
                         "refinement": refinement_mode,
                         "missing_coverage": missing_notes,
@@ -368,13 +425,21 @@ class ConversationEngine:
                              "job_levels": a.job_levels, "languages": a.languages}
                             for a in items
                         ],
-                    }),
-                )
-                reply = (payload.get("reply") or "").strip()
-                if reply:
-                    return reply
-            except Exception:
-                pass
+                    })
+                    log.info("compose_reply_before_llm", extra={"session_id": None, "body_len": len(body)})
+                    t0 = time.perf_counter()
+                    payload = self.llm.json(EXPLAINER_SYSTEM, body)
+                    t1 = time.perf_counter()
+                    log.info("compose_reply_after_llm", extra={"duration_ms": int((t1 - t0) * 1000), "payload_type": type(payload).__name__})
+                    try:
+                        reply = (payload.get("reply") or "").strip()
+                        log.info("compose_reply_parsed", extra={"reply_len": len(reply)})
+                        if reply:
+                            return reply
+                    except Exception:
+                        log.exception("compose_reply_parse_failed")
+                except Exception:
+                    log.exception("compose_reply_llm_exception")
 
         # Deterministic fallback reply.
         head = ("Updated shortlist." if refinement_mode
