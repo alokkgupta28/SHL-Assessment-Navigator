@@ -9,6 +9,7 @@ tests and in future ``/explain`` or ``/compare`` endpoints.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from typing import Annotated
 
 from fastapi import Depends, Request
@@ -41,10 +42,11 @@ class Container:
 def build_container(settings: Settings | None = None) -> Container:
     """Construct every long-lived collaborator. Called once at startup."""
     settings = settings or get_settings()
+    low_memory_mode = os.environ.get("LOW_MEMORY_MODE", "").lower() in ("1", "true", "yes")
     log.info("startup_loading_catalog", extra={"path": str(settings.catalog_file)})
     catalog = load_catalog(settings.catalog_file)
     log.info("startup_building_retriever", extra={"catalog_size": len(catalog)})
-    retriever = HybridRetriever(catalog, settings)
+    retriever = HybridRetriever(catalog, settings, enable_reranker=not low_memory_mode)
     llm: GeminiClient | None = None
     if settings.gemini_api_key:
         try:
@@ -62,6 +64,8 @@ def build_container(settings: Settings | None = None) -> Container:
             log.info("startup_reranker_ready", extra={"model": retriever.reranker.model_name})
         except Exception as exc:  # noqa: BLE001
             log.warning("startup_reranker_unavailable", extra={"error": str(exc)})
+    elif low_memory_mode:
+        log.info("startup_reranker_disabled", extra={"reason": "low_memory_mode"})
     engine = ConversationEngine(catalog, retriever, settings, llm)
     log.info("startup_complete", extra={"catalog_size": len(catalog)})
     return Container(settings, catalog, retriever, llm, engine)

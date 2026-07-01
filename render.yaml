@@ -9,6 +9,8 @@ services:
         sync: false  # must be set manually in dashboard
       - key: GEMINI_MODEL
         value: gemini-2.5-flash
+      - key: LOW_MEMORY_MODE
+        value: "true"
       - key: CATALOG_PATH
         value: data/shl_catalog.json
       - key: ALLOWED_ORIGINS
