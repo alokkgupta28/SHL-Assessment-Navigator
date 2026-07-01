@@ -114,7 +114,10 @@ def install_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def _unhandled(_: Request, exc: Exception) -> JSONResponse:
-        log.exception("unhandled_exception", extra={"type": type(exc).__name__})
+        # Log full traceback for unexpected exceptions
+        import traceback as _tb
+        tb = _tb.format_exc()
+        log.error("unhandled_exception", extra={"type": type(exc).__name__, "traceback": tb})
         return _envelope(
             "internal_error",
             "An unexpected error occurred.",

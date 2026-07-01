@@ -144,10 +144,54 @@ def create_app() -> FastAPI:
         # synchronous and CPU/IO-bound; running them on the event loop
         # would block every other request. Offload to the threadpool.
         from starlette.concurrency import run_in_threadpool
+        import traceback
+        import sys as _sys
+        import os as _os
+
+        pid_before = _os.getpid()
+        log.info("chat_invoke", extra={"session_id": req.session_id, "pid_before": pid_before})
 
         set_session_id(req.session_id)
-        raw = await run_in_threadpool(engine.handle, req)
-        return coerce_response(raw.model_dump())
+        try:
+            log.info("before_engine_handle", extra={"session_id": req.session_id})
+            pid_mid_before = _os.getpid()
+            log.info("pid_before_handle", extra={"pid": pid_mid_before})
+            raw = await run_in_threadpool(engine.handle, req)
+            pid_mid_after = _os.getpid()
+            log.info("after_engine_handle", extra={"session_id": req.session_id, "pid_after": pid_mid_after, "raw_type": type(raw).__name__})
+        except Exception as exc:  # noqa: BLE001 - we need to log then re-raise
+            log.exception("engine_handle_exception", extra={"session_id": req.session_id, "pid": _os.getpid()})
+            # log full traceback
+            tb = traceback.format_exc()
+            log.error("engine_handle_traceback", extra={"traceback": tb})
+            raise
+
+        # 3) Before raw.model_dump()
+        try:
+            log.info("before_model_dump", extra={"session_id": req.session_id})
+            dumped = raw.model_dump()
+            log.info("after_model_dump", extra={"session_id": req.session_id, "dump_keys": list(dumped.keys())})
+        except Exception:
+            log.exception("model_dump_exception", extra={"session_id": req.session_id})
+            raise
+
+        # 5) Before coerce_response()
+        try:
+            log.info("before_coerce_response", extra={"session_id": req.session_id})
+            final = coerce_response(dumped)
+            log.info("after_coerce_response", extra={"session_id": req.session_id, "final_type": type(final).__name__})
+        except Exception:
+            log.exception("coerce_response_exception", extra={"session_id": req.session_id})
+            # re-raise so FastAPI can surface 500/502 as appropriate
+            raise
+
+        try:
+            pid_after = _os.getpid()
+            log.info("before_return", extra={"session_id": req.session_id, "pid_after": pid_after})
+            return final
+        except Exception:
+            log.exception("return_exception", extra={"session_id": req.session_id})
+            raise
 
 
     # Temporary diagnostic endpoint to inspect CORS runtime configuration.
