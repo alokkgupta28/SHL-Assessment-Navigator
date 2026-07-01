@@ -171,15 +171,27 @@ class ConversationEngine:
 
         # 2) Update state from this user turn.
         if last_user:
-            mem.state = extractor.extract(mem.state, last_user, self.llm, mem.meta)
+            try:
+                mem.state = extractor.extract(mem.state, last_user, self.llm, mem.meta)
+                log.info("after_extractor_extract", extra={"session_id": req.session_id})
+            except Exception as exc:  # noqa: BLE001
+                tb = traceback.format_exc()
+                log.error("extractor_exception", extra={"session_id": req.session_id, "type": type(exc).__name__, "repr": repr(exc), "traceback": tb})
+                raise
 
         # 3) Classify intent for routing.
-        it = intent.classify(
-            last_user,
-            has_pinned=bool(mem.pinned_ids),
-            mode_hint=req.mode,
-            compare_ids=req.compare_ids,
-        )
+        try:
+            it = intent.classify(
+                last_user,
+                has_pinned=bool(mem.pinned_ids),
+                mode_hint=req.mode,
+                compare_ids=req.compare_ids,
+            )
+            log.info("after_intent_classify", extra={"session_id": req.session_id, "intent": it.intent})
+        except Exception as exc:  # noqa: BLE001
+            tb = traceback.format_exc()
+            log.error("intent_classify_exception", extra={"session_id": req.session_id, "type": type(exc).__name__, "repr": repr(exc), "traceback": tb})
+            raise
         try:
             log.debug(
                 "intent_classified",
@@ -278,11 +290,12 @@ class ConversationEngine:
             )
         # Run retrieval + rank
         try:
+            log.info("before_retriever_search", extra={"session_id": req.session_id})
             t_retr0 = time.perf_counter()
             candidates, diag = self.retriever.search(mem.state, return_diagnostics=True)
             t_retr1 = time.perf_counter()
             log.info(
-                "retrieval",
+                "after_retriever_search",
                 extra={
                     "session_id": req.session_id,
                     "query": (diag.query[:200] if hasattr(diag, 'query') else ''),
@@ -294,42 +307,70 @@ class ConversationEngine:
             )
         except Exception as exc:  # noqa: BLE001
             tb = traceback.format_exc()
-            log.error("retrieval_failed", extra={"session_id": req.session_id, "error": str(exc), "traceback": tb})
+            log.error("retriever_search_exception", extra={"session_id": req.session_id, "type": type(exc).__name__, "repr": repr(exc), "traceback": tb})
             raise
 
         try:
+            log.info("before_rank", extra={"session_id": req.session_id, "n_candidates": len(candidates)})
             ranked = rank(mem.state, candidates, top_k=MAX_SHORTLIST)
-            log.info("ranking_done", extra={"session_id": req.session_id, "n_ranked": len(ranked)})
-        except Exception:
-            log.exception("ranking_failed", extra={"session_id": req.session_id})
+            log.info("after_rank", extra={"session_id": req.session_id, "n_ranked": len(ranked)})
+        except Exception as exc:  # noqa: BLE001
+            tb = traceback.format_exc()
+            log.error("rank_exception", extra={"session_id": req.session_id, "type": type(exc).__name__, "repr": repr(exc), "traceback": tb})
+            raise
         # Hard duration budget at the *presentation* layer: retrieval keeps
         # near-misses for recall, but a user who said "under 45 min" should
         # never see a 60-min card. Fall back to ranked if filtering empties.
-        hard = self._apply_hard_constraints(ranked, mem.state)
+        try:
+            hard = self._apply_hard_constraints(ranked, mem.state)
+            log.info("after_apply_hard_constraints", extra={"session_id": req.session_id, "hard_len": len(hard) if hard is not None else 0})
+        except Exception as exc:  # noqa: BLE001
+            tb = traceback.format_exc()
+            log.error("apply_hard_constraints_exception", extra={"session_id": req.session_id, "type": type(exc).__name__, "repr": repr(exc), "traceback": tb})
+            raise
+
         if hard:
             ranked = hard
-        mem.pinned_ids = [a.id for a, _ in ranked]
         try:
-            log.info("compose_reply_start", extra={"session_id": req.session_id})
+            mem.pinned_ids = [a.id for a, _ in ranked]
+            log.info("after_pinned_ids_assignment", extra={"session_id": req.session_id, "n_pinned": len(mem.pinned_ids)})
+        except Exception as exc:  # noqa: BLE001
+            tb = traceback.format_exc()
+            log.error("pinned_ids_assignment_exception", extra={"session_id": req.session_id, "type": type(exc).__name__, "repr": repr(exc), "traceback": tb})
+            raise
+        try:
+            log.info("before_compose_reply", extra={"session_id": req.session_id})
             reply = self._compose_reply(mem, refinement_mode=False)
-            log.info("compose_reply_done", extra={"session_id": req.session_id})
-        except Exception:
-            log.exception("compose_reply_failed", extra={"session_id": req.session_id})
+            log.info("after_compose_reply", extra={"session_id": req.session_id})
+        except Exception as exc:  # noqa: BLE001
+            tb = traceback.format_exc()
+            log.error("compose_reply_exception", extra={"session_id": req.session_id, "type": type(exc).__name__, "repr": repr(exc), "traceback": tb})
             raise
 
         try:
+            log.info("before_recs_build", extra={"session_id": req.session_id})
             recs = [self._to_rec(mem.state, a, s) for a, s in ranked]
-            log.info("recs_built", extra={"session_id": req.session_id, "n_recs": len(recs)})
-        except Exception:
-            log.exception("recs_build_failed", extra={"session_id": req.session_id})
+            log.info("after_recs_build", extra={"session_id": req.session_id, "n_recs": len(recs)})
+        except Exception as exc:  # noqa: BLE001
+            tb = traceback.format_exc()
+            log.error("recs_build_exception", extra={"session_id": req.session_id, "type": type(exc).__name__, "repr": repr(exc), "traceback": tb})
             raise
 
         try:
+            log.info("before_respond", extra={"session_id": req.session_id})
             resp = self._respond(req, mem, reply, recs=recs)
-            log.info("respond_built", extra={"session_id": req.session_id})
+            log.info("after_respond", extra={"session_id": req.session_id})
+        except Exception as exc:  # noqa: BLE001
+            tb = traceback.format_exc()
+            log.error("respond_exception", extra={"session_id": req.session_id, "type": type(exc).__name__, "repr": repr(exc), "traceback": tb})
+            raise
+
+        try:
+            log.info("before_return_chatresponse", extra={"session_id": req.session_id})
             return resp
-        except Exception:
-            log.exception("respond_failed", extra={"session_id": req.session_id})
+        except Exception as exc:  # noqa: BLE001
+            tb = traceback.format_exc()
+            log.error("return_exception", extra={"session_id": req.session_id, "type": type(exc).__name__, "repr": repr(exc), "traceback": tb})
             raise
 
 
@@ -413,33 +454,29 @@ class ConversationEngine:
 
         if self.llm is not None:
             try:
-                try:
-                    body = json.dumps({
-                        "state": mem.state.model_dump(),
-                        "refinement": refinement_mode,
-                        "missing_coverage": missing_notes,
-                        "items": [
-                            {"id": a.id, "name": a.name, "category": a.category,
-                             "duration_minutes": a.duration_minutes, "skills": a.skills,
-                             "remote": a.remote, "adaptive": a.adaptive,
-                             "job_levels": a.job_levels, "languages": a.languages}
-                            for a in items
-                        ],
-                    })
-                    log.info("compose_reply_before_llm", extra={"session_id": None, "body_len": len(body)})
-                    t0 = time.perf_counter()
-                    payload = self.llm.json(EXPLAINER_SYSTEM, body)
-                    t1 = time.perf_counter()
-                    log.info("compose_reply_after_llm", extra={"duration_ms": int((t1 - t0) * 1000), "payload_type": type(payload).__name__})
-                    try:
-                        reply = (payload.get("reply") or "").strip()
-                        log.info("compose_reply_parsed", extra={"reply_len": len(reply)})
-                        if reply:
-                            return reply
-                    except Exception:
-                        log.exception("compose_reply_parse_failed")
-                except Exception:
-                    log.exception("compose_reply_llm_exception")
+                body = json.dumps({
+                    "state": mem.state.model_dump(),
+                    "refinement": refinement_mode,
+                    "missing_coverage": missing_notes,
+                    "items": [
+                        {"id": a.id, "name": a.name, "category": a.category,
+                         "duration_minutes": a.duration_minutes, "skills": a.skills,
+                         "remote": a.remote, "adaptive": a.adaptive,
+                         "job_levels": a.job_levels, "languages": a.languages}
+                        for a in items
+                    ],
+                })
+                log.info("compose_reply_before_llm", extra={"session_id": None, "body_len": len(body)})
+                t0 = time.perf_counter()
+                payload = self.llm.json(EXPLAINER_SYSTEM, body)
+                t1 = time.perf_counter()
+                log.info("compose_reply_after_llm", extra={"duration_ms": int((t1 - t0) * 1000), "payload_type": type(payload).__name__})
+                reply = (payload.get("reply") or "").strip()
+                log.info("compose_reply_parsed", extra={"reply_len": len(reply)})
+                if reply:
+                    return reply
+            except Exception:
+                log.exception("compose_reply_llm_exception")
 
         # Deterministic fallback reply.
         head = ("Updated shortlist." if refinement_mode
