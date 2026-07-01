@@ -22,6 +22,21 @@ from .schemas import ChatRequest, ChatResponse, HealthResponse
 
 log = get_logger(__name__)
 
+# Global excepthook to log uncaught exceptions with traceback and PID.
+import sys as _sys
+import traceback as _traceback
+import os as _os
+
+def _log_excepthook(exc_type, exc, tb):
+    try:
+        trace = _traceback.format_exception(exc_type, exc, tb)
+        log.critical("uncaught_exception", extra={"type": str(exc_type), "exception": str(exc), "traceback": "".join(trace), "pid": _os.getpid()})
+    except Exception:
+        # avoid raising in excepthook
+        pass
+
+_sys.excepthook = _log_excepthook
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
