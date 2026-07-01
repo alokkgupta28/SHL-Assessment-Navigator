@@ -53,7 +53,8 @@ from .confidence import (
     cross_encoder_confidence,
     score_gap_confidence,
 )
-from .embeddings import encode
+from .embeddings import encode, has_encoder
+import traceback
 from .faiss_index import FaissIndex
 from .reranker import CrossEncoderReranker
 from .rrf import reciprocal_rank_fusion
@@ -363,28 +364,48 @@ class HybridRetriever:
         candidate_n = min(self.candidate_n, n)
 
         # 1. Dense
-        try:
-            log.info("encode_before", extra={"query_len": len(query), "model": self.settings.embedding_model})
-            t0_encode = time.perf_counter()
-            qvec = encode([query], self.settings.embedding_model)[0]
-            t1_encode = time.perf_counter()
-            log.info("encode_after", extra={"elapsed_ms": int((t1_encode - t0_encode) * 1000)})
-        except Exception as exc:  # noqa: BLE001
-            tb = traceback.format_exc()
-            log.error("encode_exception", extra={"type": type(exc).__name__, "repr": repr(exc), "traceback": tb})
-            raise
-        try:
-            log.info("faiss_search_before", extra={"candidate_n": candidate_n})
-            t0_faiss = time.perf_counter()
-            d_scores, d_idx = self.faiss.search(qvec, candidate_n)
-            t1_faiss = time.perf_counter()
-            log.info("faiss_search_after", extra={"elapsed_ms": int((t1_faiss - t0_faiss) * 1000)})
-        except Exception as exc:  # noqa: BLE001
-            tb = traceback.format_exc()
-            log.error("faiss_search_exception", extra={"type": type(exc).__name__, "repr": repr(exc), "traceback": tb})
-            raise
-        dense_ranked = [int(i) for i in d_idx if i >= 0]
-        dense_score_map = {int(i): float(s) for s, i in zip(d_scores, d_idx) if i >= 0}
+        qvec = None
+        d_scores = []
+        d_idx = []
+        dense_ranked = []
+        dense_score_map = {}
+        # Attempt dense retrieval only if an encoder has been initialized.
+        if has_encoder():
+            try:
+                log.info("encode_before", extra={"query_len": len(query), "model": self.settings.embedding_model})
+                t0_encode = time.perf_counter()
+                qvec = encode([query], self.settings.embedding_model)[0]
+                t1_encode = time.perf_counter()
+                log.info("encode_after", extra={"elapsed_ms": int((t1_encode - t0_encode) * 1000)})
+            except Exception as exc:  # noqa: BLE001
+                tb = traceback.format_exc()
+                log.error("encode_exception", extra={"type": type(exc).__name__, "repr": repr(exc), "traceback": tb})
+                log.warning("Dense retrieval disabled because encoder unavailable.")
+                qvec = None
+        else:
+            log.info("dense_disabled_no_encoder", extra={"reason": "encoder_not_initialized"})
+            log.warning("Dense retrieval disabled because encoder unavailable.")
+
+        if qvec is not None and getattr(self, "faiss", None) is not None:
+            try:
+                log.info("faiss_search_before", extra={"candidate_n": candidate_n})
+                t0_faiss = time.perf_counter()
+                d_scores, d_idx = self.faiss.search(qvec, candidate_n)
+                t1_faiss = time.perf_counter()
+                log.info("faiss_search_after", extra={"elapsed_ms": int((t1_faiss - t0_faiss) * 1000)})
+                dense_ranked = [int(i) for i in d_idx if i >= 0]
+                dense_score_map = {int(i): float(s) for s, i in zip(d_scores, d_idx) if i >= 0}
+            except Exception as exc:  # noqa: BLE001
+                tb = traceback.format_exc()
+                log.error("faiss_search_exception", extra={"type": type(exc).__name__, "repr": repr(exc), "traceback": tb})
+                log.warning("Dense retrieval disabled because faiss search failed.")
+                dense_ranked = []
+                dense_score_map = {}
+        else:
+            # No dense results; continue with BM25-only.
+            dense_ranked = []
+            dense_score_map = {}
+        # dense_ranked and dense_score_map populated above when available
 
         # 2. Sparse
         bm25_scores = np.asarray(self.bm25.scores(query), dtype="float32")

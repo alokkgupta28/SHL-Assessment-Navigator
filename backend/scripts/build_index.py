@@ -26,7 +26,7 @@ REPO = BACKEND.parent
 sys.path.insert(0, str(BACKEND))
 
 from app.catalog.loader import load_catalog
-from app.retrieval.embeddings import encode
+from app.retrieval.embeddings import encode, initialize_encoder
 from app.retrieval.faiss_index import FaissIndex
 from app.retrieval.hybrid import HybridRetriever
 from app.config import get_settings
@@ -49,6 +49,7 @@ def build(catalog_path: Path, out_dir: Path, model_name: str, force: bool = Fals
         raise SystemExit("Catalog empty or not found — aborting")
 
     print(f"Encoding {len(corpus)} documents with model {model_name}")
+    initialize_encoder(model_name)
     vecs = encode(corpus, model_name)
     vecs = vecs.astype("float32")
 
